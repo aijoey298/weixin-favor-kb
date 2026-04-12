@@ -1,0 +1,39 @@
+# cuda:
+#   lib_paths: []  # WSL 环境下可能需要手动配置 NVIDIA CUDA 库路径，详见 run.sh
+
+whisper:
+  model_size: "large-v3"
+  device: "cuda"
+  compute_type: "int8_float16"
+  language: "zh"
+
+llm:
+  api_key: "YOUR_API_KEY"            # 替换为你的 API Key
+  base_url: "https://api.openai.com/v1"  # 或其他 OpenAI 兼容接口
+  model: "gpt-4o"                    # 或其他模型
+
+frames:
+  threshold: 30.0
+  max_frames: 20
+
+ocr:
+  confidence_threshold: 0.5
+
+categories:
+  - RAG
+  - AGENT
+  - 感悟
+  - 运动
+  - 前端
+  - 后端
+  - DevOps
+  - AI/ML
+  - 生活技巧
+  - 其他
+
+paths:
+  downloads: "./downloads"
+  output: "./output"
+  transcripts: "./output/transcripts"
+  notes: "./output/notes"
+  frames: "./output/frames"

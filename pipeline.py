@@ -1,0 +1,382 @@
+"""视频转知识笔记 — 主管道入口"""
+
+import argparse
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import yaml
+from jinja2 import Environment, FileSystemLoader
+from loguru import logger
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+)
+from rich.table import Table
+
+from modules.audio import extract_audio
+from modules.transcribe import Transcriber
+from modules.frames import extract_keyframes
+from modules.ocr import OCRProcessor
+from modules.classifier import classify_content
+from modules.analyzer import ContentAnalyzer
+
+console = Console()
+
+VIDEO_EXTENSIONS: set[str] = {".mp4", ".avi", ".mov", ".mkv", ".flv", ".webm"}
+
+
+def load_config(config_path: str) -> dict:
+    """加载配置文件，缺失时使用默认值。"""
+    defaults: dict = {
+        "whisper": {
+            "model_size": "large-v3",
+            "device": "cuda",
+            "compute_type": "int8_float16",
+            "language": "zh",
+        },
+        "llm": {
+            "api_key": "",
+            "base_url": "https://api.openai.com/v1",
+            "model": "gpt-4o",
+        },
+        "frames": {"threshold": 30.0, "max_frames": 20},
+        "ocr": {"confidence_threshold": 0.5},
+        "categories": [
+            "RAG",
+            "AGENT",
+            "感悟",
+            "运动",
+            "前端",
+            "后端",
+            "DevOps",
+            "AI/ML",
+            "生活技巧",
+            "其他",
+        ],
+        "paths": {
+            "downloads": "./downloads",
+            "output": "./output",
+            "transcripts": "./output/transcripts",
+            "notes": "./output/notes",
+            "frames": "./output/frames",
+        },
+    }
+
+    path = Path(config_path)
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            user_config = yaml.safe_load(f) or {}
+        # 深度合并：用户配置覆盖默认值
+        _deep_merge(defaults, user_config)
+        logger.info("配置已加载: {}", path)
+    else:
+        logger.warning("配置文件不存在: {}，使用默认配置", path)
+
+    return defaults
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """递归合并字典，override 覆盖 base。"""
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def collect_videos(input_path: str) -> list[Path]:
+    """收集所有待处理的视频文件（支持单文件或目录）。"""
+    p = Path(input_path)
+
+    if p.is_file():
+        if p.suffix.lower() in VIDEO_EXTENSIONS:
+            return [p]
+        logger.error("不支持的文件格式: {}", p.suffix)
+        return []
+
+    if p.is_dir():
+        # 递归扫描所有子目录（适配 wx_channel 按作者分类的目录结构）
+        videos = sorted(
+            f
+            for f in p.rglob("*")
+            if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS
+        )
+        logger.info("递归扫描 {}，找到 {} 个视频文件", p, len(videos))
+        return videos
+
+    logger.error("路径不存在: {}", p)
+    return []
+
+
+def process_video(
+    video_path: Path,
+    config: dict,
+    transcriber: Transcriber,
+    ocr_processor: OCRProcessor,
+    analyzer: ContentAnalyzer,
+    env: Environment,
+) -> dict:
+    """处理单个视频的完整管道。
+
+    Returns:
+        {"status": "success"|"failed", "video": str, "category": str, "tags": list, "error": str|None}
+    """
+    video_name = video_path.stem
+    author_name = (
+        video_path.parent.name
+        if video_path.parent.name != video_path.parent.parent.name
+        else "未知"
+    )
+    # 文件名格式: 标题_数字ID.mp4 → 提取标题部分
+    title = video_name.rsplit("_", 1)[0] if "_" in video_name else video_name
+    # 限制标题长度，避免文件名过长
+    title = title[:80] if len(title) > 80 else title
+    logger.info("=" * 60)
+    logger.info("开始处理: {} (作者: {})", title, author_name)
+
+    try:
+        # === 步骤 1: 提取音频 ===
+        audio_path = str(Path(config["paths"]["frames"]) / video_name / "audio.wav")
+        extract_audio(str(video_path), audio_path)
+
+        # === 步骤 2: 语音转文字 ===
+        result = transcriber.transcribe(audio_path)
+        transcript = result["text"]
+
+        # === 步骤 3: 提取关键帧 ===
+        frames_dir = str(Path(config["paths"]["frames"]) / video_name)
+        frame_paths = extract_keyframes(
+            str(video_path),
+            frames_dir,
+            threshold=config["frames"]["threshold"],
+            max_frames=config["frames"]["max_frames"],
+        )
+
+        # === 步骤 4: OCR 识别 ===
+        ocr_texts = ocr_processor.batch_extract(frame_paths)
+        ocr_text = " ".join(t for t in ocr_texts if t)
+
+        # === 步骤 5: 内容分类 ===
+        combined_text = f"{transcript}\n{ocr_text}"
+        category, tags = classify_content(
+            combined_text,
+            llm_client=analyzer.client,
+            model=analyzer.model,
+        )
+
+        # === 步骤 6: LLM 深度分析 ===
+        analysis = analyzer.analyze(transcript, ocr_text, category, tags)
+
+        # === 步骤 7: 保存转录文稿 ===
+        transcripts_dir = Path(config["paths"]["transcripts"])
+        transcripts_dir.mkdir(parents=True, exist_ok=True)
+        transcript_file = transcripts_dir / f"{video_name}.txt"
+        transcript_file.write_text(transcript, encoding="utf-8")
+        logger.info("转录文稿已保存: {}", transcript_file)
+
+        # === 步骤 8: 渲染 Obsidian 笔记 ===
+        notes_dir = Path(config["paths"]["notes"])
+        notes_dir.mkdir(parents=True, exist_ok=True)
+
+        template = env.get_template("obsidian.md")
+        note_content = template.render(
+            title=title,
+            author=author_name,
+            date=datetime.now().strftime("%Y-%m-%d"),
+            category=analysis["category"],
+            tags=analysis["tags"],
+            summary=analysis["summary"],
+            key_points=analysis["key_points"],
+            resources=analysis["resources"],
+            action_items=analysis["action_items"],
+            transcript=transcript,
+        )
+
+        note_file = notes_dir / f"{video_name}.md"
+        note_file.write_text(note_content, encoding="utf-8")
+        logger.success("Obsidian 笔记已生成: {}", note_file)
+
+        return {
+            "status": "success",
+            "video": video_path.name,
+            "author": author_name,
+            "title": title,
+            "category": category,
+            "tags": tags,
+            "note": str(note_file),
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.exception("处理失败 [{}]: {}", video_path.name, e)
+        return {
+            "status": "failed",
+            "video": video_path.name,
+            "category": "",
+            "tags": [],
+            "note": "",
+            "error": str(e),
+        }
+
+
+def print_report(results: list[dict]) -> None:
+    """用 Rich 打印处理结果汇总报告。"""
+    succeeded = [r for r in results if r["status"] == "success"]
+    failed = [r for r in results if r["status"] == "failed"]
+
+    console.print()
+    console.print(
+        Panel.fit(
+            f"[bold green]✅ 成功: {len(succeeded)}[/]  [bold red]❌ 失败: {len(failed)}[/]  [bold]总计: {len(results)}[/]",
+            title="📊 处理报告",
+            border_style="blue",
+        )
+    )
+
+    if succeeded:
+        table = Table(title="成功处理的视频", show_lines=True)
+        table.add_column("视频", style="cyan")
+        table.add_column("作者", style="yellow")
+        table.add_column("分类", style="magenta")
+        table.add_column("标签", style="green")
+
+        for r in succeeded:
+            table.add_row(
+                r.get("title", r["video"])[:40],
+                r.get("author", ""),
+                r["category"],
+                ", ".join(r["tags"])[:50],
+            )
+        console.print(table)
+
+    if failed:
+        console.print("\n[bold red]失败的视频:[/]")
+        for r in failed:
+            console.print(f"  [red]✗[/] {r['video']}: {r['error']}")
+
+
+def main() -> None:
+    """主入口：解析参数，运行管道。"""
+    parser = argparse.ArgumentParser(
+        description="视频转知识笔记 — 将微信视频号收藏转为 Obsidian 笔记",
+    )
+    parser.add_argument(
+        "input",
+        help="视频文件路径或包含视频的目录",
+    )
+    parser.add_argument(
+        "--config",
+        default="config.yaml",
+        help="配置文件路径 (默认: config.yaml)",
+    )
+    args = parser.parse_args()
+
+    # 配置日志
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+        level="INFO",
+    )
+    logger.add(
+        "pipeline.log",
+        rotation="10 MB",
+        encoding="utf-8",
+        level="DEBUG",
+    )
+
+    # 加载配置
+    config = load_config(args.config)
+
+    # 设置 CUDA 库路径（WSL 环境下 ctranslate2 需要显式指定）
+    cuda_paths = config.get("cuda", {}).get("lib_paths", [])
+    if cuda_paths:
+        existing = os.environ.get("LD_LIBRARY_PATH", "")
+        new_paths = ":".join(p for p in cuda_paths if Path(p).exists())
+        if new_paths:
+            os.environ["LD_LIBRARY_PATH"] = (
+                f"{new_paths}:{existing}" if existing else new_paths
+            )
+            logger.info(
+                "已注入 CUDA 库路径: {} 条",
+                len([p for p in cuda_paths if Path(p).exists()]),
+            )
+
+    # 初始化组件
+    transcriber = Transcriber(
+        model_size=config["whisper"]["model_size"],
+        device=config["whisper"]["device"],
+        compute_type=config["whisper"]["compute_type"],
+    )
+
+    ocr_processor = OCRProcessor(
+        confidence_threshold=config["ocr"]["confidence_threshold"],
+    )
+
+    analyzer = ContentAnalyzer(
+        api_key=config["llm"]["api_key"],
+        base_url=config["llm"]["base_url"],
+        model=config["llm"]["model"],
+    )
+
+    # Jinja2 模板环境
+    template_dir = Path(__file__).parent / "templates"
+    env = Environment(
+        loader=FileSystemLoader(str(template_dir)),
+        keep_trailing_newline=True,
+    )
+
+    # 收集视频文件
+    videos = collect_videos(args.input)
+    if not videos:
+        console.print("[bold red]未找到可处理的视频文件[/]")
+        sys.exit(1)
+
+    console.print(
+        Panel.fit(
+            f"[bold]找到 {len(videos)} 个视频文件[/]\n"
+            f"模型: {config['whisper']['model_size']} | LLM: {config['llm']['model']}",
+            title="🎬 视频转知识笔记",
+            border_style="bright_blue",
+        )
+    )
+
+    # 批量处理
+    results: list[dict] = []
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TextColumn("{task.fields[current]}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("处理视频...", total=len(videos), current="")
+
+        for video in videos:
+            progress.update(task, current=video.name)
+            result = process_video(
+                video, config, transcriber, ocr_processor, analyzer, env
+            )
+            results.append(result)
+            progress.advance(task)
+
+    # 打印报告
+    print_report(results)
+
+    # 退出码
+    if all(r["status"] == "failed" for r in results):
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
