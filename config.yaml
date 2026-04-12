@@ -20,16 +20,54 @@ ocr:
   confidence_threshold: 0.5
 
 categories:
-  - RAG
-  - AGENT
-  - 感悟
-  - 运动
-  - 前端
-  - 后端
-  - DevOps
-  - AI/ML
-  - 生活技巧
-  - 其他
+  - name: "RAG"
+    emoji: "🔍"
+    description: "检索增强生成、向量检索、知识库问答、Query改写、Embedding、文档解析(OCR/PDF)"
+  - name: "AGENT"
+    emoji: "🤖"
+    description: "AI智能体开发、Agent框架、Skills、MCP、多智能体编排、Claude Code使用、Computer Use"
+  - name: "AI/ML"
+    emoji: "🧠"
+    description: "大模型通用(GPT/Claude/GLM等)、模型训练/微调、AI产品经理、AI行业趋势、AI工具推荐(非开发类)、AI学习方法论、TTS/语音识别/OCR模型"
+  - name: "前端"
+    emoji: "🎨"
+    description: "前端框架、UI/UX设计、CSS、React/Vue/TypeScript、页面交互、前端工程化"
+  - name: "后端"
+    emoji: "⚙️"
+    description: "后端架构、数据库、API设计、服务器部署、Token认证、系统设计"
+  - name: "DevOps"
+    emoji: "🔧"
+    description: "运维、HTTPS/SSL、CI/CD、Docker/K8s、云服务、域名、监控、静态站点部署"
+  - name: "开发"
+    emoji: "💻"
+    description: "通用开发工具(GitHub项目、开源工具)、编程效率、建站、VitePress/Hexo等建站工具、PDF处理工具、非AI专用的技术工具、文件格式转换"
+  - name: "创富"
+    emoji: "💰"
+    description: "创业、赚钱、投资理财、金融知识、股票交易、商业案例、电商运营、流量运营、商业模式、超级个体、副业、IP打造"
+  - name: "文史哲"
+    emoji: "📜"
+    description: "历史故事、文学作品、诗词、哲学思想(王阳明/国学/道/儒)、人文社科书籍、文化古迹"
+  - name: "感悟"
+    emoji: "💡"
+    description: "纯个人成长感悟、人生哲理、心理疗愈、认知觉醒、自我提升(非技术非商业)"
+  - name: "运动"
+    emoji: "🏃"
+    description: "户外运动、徒步、骑行、自驾游攻略、旅行路线"
+  - name: "生活技巧"
+    emoji: "🏠"
+    description: "健康养生、职场技巧、失业金/社保、税收、科普知识、软件使用技巧、自媒体创作"
+  - name: "其他"
+    emoji: "📎"
+    description: "无法归入以上任何类别的"
+
+classify_rules: |
+  分类关键区分规则：
+  - 「开发」vs「DevOps」：开发=开发者工具/GitHub项目/效率工具；DevOps=部署/运维/HTTPS/服务器/云服务
+  - 「开发」vs「前端/后端」：明确涉及前端UI/框架→前端；明确涉及后端架构→后端；通用工具/建站→开发
+  - 「开发」vs「AI/ML」：与AI大模型强相关→AI/ML；通用技术工具(PDF解析/OCR引擎)→开发
+  - 「创富」vs「感悟」：涉及赚钱/商业/创业/投资→创富；纯心灵感悟/人生哲学→感悟
+  - 「文史哲」vs「感悟」：涉及具体历史/文学/哲学体系(王阳明/国学/诗词)→文史哲；个人情感/认知觉醒→感悟
+  - 「运动」vs「生活技巧」：户外活动/徒步/自驾路线→运动；健康知识/科普/社保→生活技巧
 
 paths:
   downloads: "./downloads"

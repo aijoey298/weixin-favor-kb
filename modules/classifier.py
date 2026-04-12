@@ -6,22 +6,11 @@ import time
 from loguru import logger
 from openai import OpenAI
 
-CATEGORIES: list[str] = [
-    "RAG",
-    "AGENT",
-    "感悟",
-    "运动",
-    "前端",
-    "后端",
-    "DevOps",
-    "AI/ML",
-    "生活技巧",
-    "其他",
-]
-
 _CLASSIFY_PROMPT = """将以下视频内容归入最合适的类别，并提取 2-5 个标签。
 
 类别列表: {categories}
+
+{classify_rules}
 
 视频内容:
 {text}
@@ -81,11 +70,17 @@ def classify_content(
     text: str,
     llm_client: OpenAI,
     model: str,
+    categories: list[str] | None = None,
+    classify_rules: str = "",
 ) -> tuple[str, list[str]]:
+    if categories is None:
+        categories = ["其他"]
+
     truncated = text[:1500] if len(text) > 1500 else text
 
     prompt = _CLASSIFY_PROMPT.format(
-        categories=", ".join(CATEGORIES),
+        categories=", ".join(categories),
+        classify_rules=classify_rules,
         text=truncated,
     )
 
@@ -103,7 +98,7 @@ def classify_content(
     category = result.get("category", "其他")
     tags = result.get("tags", [])
 
-    if category not in CATEGORIES:
+    if category not in categories:
         logger.warning("未知类别 '{}', 回退到 '其他'", category)
         category = "其他"
 

@@ -49,17 +49,49 @@ def load_config(config_path: str) -> dict:
         "frames": {"threshold": 30.0, "max_frames": 20},
         "ocr": {"confidence_threshold": 0.5},
         "categories": [
-            "RAG",
-            "AGENT",
-            "感悟",
-            "运动",
-            "前端",
-            "后端",
-            "DevOps",
-            "AI/ML",
-            "生活技巧",
-            "其他",
+            {
+                "name": "RAG",
+                "emoji": "🔍",
+                "description": "检索增强生成、向量检索、知识库问答",
+            },
+            {
+                "name": "AGENT",
+                "emoji": "🤖",
+                "description": "AI智能体开发、Skills、MCP、Claude Code",
+            },
+            {
+                "name": "AI/ML",
+                "emoji": "🧠",
+                "description": "大模型通用、模型训练、AI行业趋势",
+            },
+            {"name": "前端", "emoji": "🎨", "description": "前端框架、UI/UX设计、CSS"},
+            {"name": "后端", "emoji": "⚙️", "description": "后端架构、数据库、API设计"},
+            {
+                "name": "DevOps",
+                "emoji": "🔧",
+                "description": "运维、HTTPS、CI/CD、云服务",
+            },
+            {
+                "name": "开发",
+                "emoji": "💻",
+                "description": "通用开发工具、GitHub项目、建站",
+            },
+            {
+                "name": "创富",
+                "emoji": "💰",
+                "description": "创业、投资理财、运营、副业",
+            },
+            {"name": "文史哲", "emoji": "📜", "description": "历史、文学、哲学思想"},
+            {
+                "name": "感悟",
+                "emoji": "💡",
+                "description": "个人成长、心理疗愈、认知觉醒",
+            },
+            {"name": "运动", "emoji": "🏃", "description": "户外运动、徒步、自驾"},
+            {"name": "生活技巧", "emoji": "🏠", "description": "健康养生、职场、社保"},
+            {"name": "其他", "emoji": "📎", "description": "无法归类的"},
         ],
+        "classify_rules": "",
         "paths": {
             "downloads": "./downloads",
             "output": "./output",
@@ -80,6 +112,13 @@ def load_config(config_path: str) -> dict:
         logger.warning("配置文件不存在: {}，使用默认配置", path)
 
     return defaults
+
+
+def _get_category_names(config: dict) -> list[str]:
+    cats = config.get("categories", [])
+    if cats and isinstance(cats[0], dict):
+        return [c["name"] for c in cats]
+    return cats
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -170,6 +209,8 @@ def process_video(
             combined_text,
             llm_client=analyzer.client,
             model=analyzer.model,
+            categories=_get_category_names(config),
+            classify_rules=config.get("classify_rules", ""),
         )
 
         # === 步骤 6: LLM 深度分析 ===

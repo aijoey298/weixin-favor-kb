@@ -15,42 +15,32 @@ from openai import OpenAI
 NOTES_DIR = Path("output/notes")
 VAULT_DIR = Path("obsidian_vault")
 
-CATEGORY_EMOJI = {
-    "RAG": "🔍",
-    "AGENT": "🤖",
-    "AI/ML": "🧠",
-    "前端": "🎨",
-    "后端": "⚙️",
-    "DevOps": "🔧",
-    "开发": "💻",
-    "创富": "💰",
-    "文史哲": "📜",
-    "感悟": "💡",
-    "运动": "🏃",
-    "生活技巧": "🏠",
-    "其他": "📎",
-}
 
-
-def _load_llm_config():
+def _load_config():
     cfg_path = Path("config.yaml")
-    if cfg_path.exists():
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-        llm = cfg.get("llm", {})
-        return (
-            llm.get("api_key", ""),
-            llm.get("base_url", "https://api.openai.com/v1"),
-            llm.get("model", "gpt-4o"),
-        )
-    return (
-        os.environ.get("LLM_API_KEY", ""),
-        os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1"),
-        os.environ.get("LLM_MODEL", "gpt-4o"),
-    )
+    if not cfg_path.exists():
+        logger.error("config.yaml 不存在")
+        raise SystemExit(1)
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+
+    llm = cfg.get("llm", {})
+    api_key = llm.get("api_key", "") or os.environ.get("LLM_API_KEY", "")
+    base_url = llm.get("base_url", "https://api.openai.com/v1")
+    model = llm.get("model", "gpt-4o")
+
+    cats_cfg = cfg.get("categories", [])
+    if cats_cfg and isinstance(cats_cfg[0], dict):
+        cat_names = [c["name"] for c in cats_cfg]
+        cat_emoji = {c["name"]: c.get("emoji", "📎") for c in cats_cfg}
+    else:
+        cat_names = cats_cfg
+        cat_emoji = {}
+
+    return api_key, base_url, model, cat_names, cat_emoji
 
 
-LLM_API_KEY, LLM_BASE_URL, LLM_MODEL = _load_llm_config()
+LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, CATEGORY_ORDER, CATEGORY_EMOJI = _load_config()
 
 INITIAL_DELAY = 5
 MAX_DELAY = 120
@@ -269,21 +259,7 @@ def build_home(by_cat: dict[str, list[dict]], all_notes: list[dict], vault_dir: 
         "",
     ]
 
-    for cat in [
-        "RAG",
-        "AGENT",
-        "AI/ML",
-        "前端",
-        "后端",
-        "DevOps",
-        "开发",
-        "创富",
-        "文史哲",
-        "感悟",
-        "运动",
-        "生活技巧",
-        "其他",
-    ]:
+    for cat in CATEGORY_ORDER:
         count = len(by_cat.get(cat, []))
         if count == 0:
             continue

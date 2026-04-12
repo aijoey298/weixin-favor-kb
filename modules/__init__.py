@@ -4,7 +4,7 @@ from modules.audio import extract_audio
 from modules.transcribe import Transcriber
 from modules.frames import extract_keyframes
 from modules.ocr import OCRProcessor
-from modules.classifier import classify_content, CATEGORIES
+from modules.classifier import classify_content
 from modules.analyzer import ContentAnalyzer
 
 __all__ = [
@@ -13,6 +13,5 @@ __all__ = [
     "extract_keyframes",
     "OCRProcessor",
     "classify_content",
-    "CATEGORIES",
     "ContentAnalyzer",
 ]
