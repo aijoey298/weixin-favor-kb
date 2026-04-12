@@ -13,9 +13,26 @@ from openai import OpenAI
 
 NOTES_DIR = Path("output/notes")
 
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
-LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
+
+def _load_llm_config():
+    cfg_path = Path("config.yaml")
+    if cfg_path.exists():
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        llm = cfg.get("llm", {})
+        return (
+            llm.get("api_key", ""),
+            llm.get("base_url", "https://api.openai.com/v1"),
+            llm.get("model", "gpt-4o"),
+        )
+    return (
+        os.environ.get("LLM_API_KEY", ""),
+        os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1"),
+        os.environ.get("LLM_MODEL", "gpt-4o"),
+    )
+
+
+LLM_API_KEY, LLM_BASE_URL, LLM_MODEL = _load_llm_config()
 
 INITIAL_DELAY = 5
 MAX_DELAY = 120

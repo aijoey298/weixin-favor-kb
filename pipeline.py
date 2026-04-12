@@ -373,6 +373,20 @@ def main() -> None:
     # 打印报告
     print_report(results)
 
+    # 处理完成后自动构建 Obsidian Vault
+    if any(r["status"] == "success" for r in results):
+        logger.info("开始构建 Obsidian Vault...")
+        import subprocess
+
+        build_result = subprocess.run(
+            [sys.executable, str(Path(__file__).parent / "build_vault.py")],
+            cwd=str(Path(__file__).parent),
+        )
+        if build_result.returncode == 0:
+            logger.success("Obsidian Vault 构建完成")
+        else:
+            logger.error("Obsidian Vault 构建失败，可手动运行: python build_vault.py")
+
     # 退出码
     if all(r["status"] == "failed" for r in results):
         sys.exit(1)
