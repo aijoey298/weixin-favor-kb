@@ -52,6 +52,8 @@ rich | 终端美化（进度条、表格报告）
 在微信中打开视频号 → 进入「我的收藏」页面
 工具自动注入下载按钮,点击批量下载
 
+![微信视频号下载助手](images/01-workflow.png)
+
 下载完成后,视频按作者名分类保存。将整个目录复制到 WSL 的工作目录:
 
 cp -r /mnt/c/Users/你的用户名/下载目录/ ~/temp/weixin-favor-kb/downloads/
@@ -94,6 +96,8 @@ bash run.sh
 
 处理完成后会打印 Rich 表格报告,显示每个视频的分类和标签。
 
+![处理报告](images/02-obsidian-home.png)
+
 WSLU用户注意: run.sh 会在 Python 启动前注入 CUDA 库路径。如果你的 WSL 环境中 CUDA 库不在系统路径中,需要编辑 run.sh 中的 CUDA_BASE 路径,指向你系统中的 NVIDIA 库目录。
 
 导入 Obsidian
@@ -107,6 +111,8 @@ cp -r obsidian_vault /mnt/c/Users/你的用户名/Documents/
 「管理仓库」→「打开本地仓库」
 选择刚才复制的 obsidian_vault 文件夹
 
+![Obsidian 导入](images/03-category-agent.png)
+
 不要通过 \\wsl$\ 路径直接打开 WSL 目录,Obsidian 的文件监视器不支持 WSL 网络文件系统,会报 EISDIR 错误。
 
 第二部分:使用效果
@@ -114,6 +120,8 @@ cp -r obsidian_vault /mnt/c/Users/你的用户名/Documents/
 Obsidian 首页
 
 打开 vault 后看到的是知识库总览页: 首页展示全局统计（例如本次生成共 261 篇笔记、955 个标签、751 条资源）,以及 13 个分类入口。每个分类标注了笔记数量,点击即可跳转。
+
+![Obsidian 知识库首页](images/04-note-structure.png)
 
 分类页:知识全景 + 行动计划
 
@@ -126,6 +134,8 @@ Obsidian 首页
 行动计划:从入门（阅读 Anthropic《Building Effective Agents》）到实践（部署 OpenManus）到深入（研究 Claude Code 六层记忆架构）
 
 每个行动项都标注了来源笔记编号和具体的 GitHub 仓库名,可以直接找到来源并开始实验。
+
+![分类页知识全景](images/05-links.png)
 
 笔记页:结构化知识卡片
 
@@ -141,6 +151,8 @@ Details 折叠: 原始转录文字用 HTML <details> 折叠
 Obsidian 的核心能力是双向链接。在分类页点击 [[笔记名]] 跳转到具体笔记,笔记中的标签也可以反向检索所有关联笔记。
 
 同时也可以查看某个TAG或者主题的知识图谱:
+
+![知识图谱](images/07-categories.png)
 
 分类体系
 
